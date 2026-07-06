@@ -1,0 +1,13 @@
+streamlit
+pandas 
+openpyxl
+langgraph 
+langchain
+langchain-groq
+python-dotenv
+pytesseract
+opencv-python
+pillow
+qrcode
+reportlab
+python-dateutil
