@@ -1,55 +1,85 @@
-import pandas as pd
 from pathlib import Path
+import pandas as pd
+
 
 class ExcelManager:
     """
-    Handles all Excel operations for the society Event Pass System.
+    Handles all Excel read/write operations.
+
+    Every service should use this class instead of
+    directly accessing Excel files.
     """
 
-    DATA_DIR=Path("data")
+    DATA_DIR = Path("data")
 
     MEMBERS_FILE = DATA_DIR / "members.xlsx"
     EVENTS_FILE = DATA_DIR / "events.xlsx"
     BOOKINGS_FILE = DATA_DIR / "bookings.xlsx"
     PAYMENTS_FILE = DATA_DIR / "payments.xlsx"
 
+    # ==========================================================
+    # Generic Helpers
+    # ==========================================================
 
-    ## MEMBERS
+    @staticmethod
+    def _read_excel(file_path):
+        return pd.read_excel(file_path)
+
+    @staticmethod
+    def _write_excel(df, file_path):
+        df.to_excel(file_path, index=False)
+
+    @staticmethod
+    def _append_row(df, row):
+        return pd.concat(
+            [df, pd.DataFrame([row])],
+            ignore_index=True
+        )
+
+    # ==========================================================
+    # MEMBERS
+    # ==========================================================
 
     @classmethod
-    def load_membbers(cls):
-        return pd.read_excel(cls.MEMBERS_FILE)
+    def load_members(cls):
+        return cls._read_excel(cls.MEMBERS_FILE)
 
     @classmethod
     def get_all_wings(cls):
-        df=cls.load_membbers()
-        return sorted(df["Wing"].dropna().unique().tolist())
+        df = cls.load_members()
+
+        return sorted(
+            df["Wing"].dropna().unique().tolist()
+        )
 
     @classmethod
-    def get_flat_by_wings(cls,wing):
-        df=cls.load_membbers()
+    def get_flats_by_wing(cls, wing):
 
-        flats=(
-            df[df["Wing"]==wing]["flat No"]
+        df = cls.load_members()
+
+        return sorted(
+            df[df["Wing"] == wing]["Flat No"]
             .dropna()
             .unique()
             .tolist()
-        )    
-        return sorted(flats)
+        )
 
     @classmethod
-    def get_members_by_flats(cls,flat_no):
-        df=pd.load_members()
+    def get_members_by_flat(cls, flat_no):
 
-        return df[df["Flat No"] == flat_no]    
+        df = cls.load_members()
+
+        return df[df["Flat No"] == flat_no]
 
     @classmethod
     def get_primary_contact(cls, flat_no):
+
         df = cls.load_members()
 
         result = df[
             (df["Flat No"] == flat_no)
-            & (df["Is Primary Contact"] == "Yes")
+            &
+            (df["Is Primary Contact"] == "Yes")
         ]
 
         if result.empty:
@@ -57,96 +87,216 @@ class ExcelManager:
 
         return result.iloc[0]
 
-    ## EVENTS
+    # ==========================================================
+    # EVENTS
+    # ==========================================================
+
     @classmethod
-    def load_event(cls):
-        return pd.read_excel(cls.EVENTS_FILE)
+    def load_events(cls):
+        return cls._read_excel(cls.EVENTS_FILE)
 
     @classmethod
     def get_open_events(cls):
+
         df = cls.load_events()
 
         return df[df["Status"] == "Open"]
 
     @classmethod
     def get_event_by_id(cls, event_id):
+
         df = cls.load_events()
 
-        result = df[df["Event ID"] == event_id]
+        result = df[
+            df["Event ID"] == event_id
+        ]
 
         if result.empty:
             return None
 
         return result.iloc[0]
 
-    ## BOOKINGS 
+    @classmethod
+    def event_exists(cls, event_id):
+
+        df = cls.load_events()
+
+        return not df[
+            df["Event ID"] == event_id
+        ].empty
 
     @classmethod
-    def load_boking(cls):
-        return pd.read_excel(cls.BOOKINGS_FILE)
+    def save_event(cls, event):
 
-    @classmethod
-    def booking_exists(cls,event_id,flat_no):
-        df=cls.load_booking()
+        df = cls.load_events()
 
-        result = df[
-            (df["Event ID"] == event_id)
-            & (df["Flat No"] == flat_no)
-        ]
+        df = cls._append_row(df, event)
 
-        return not result.empty
-
-    @classmethod
-    def save_booking(cls,booking_data):
-        df=cls.load_booking()
-
-        df = pd.concat(
-            [df, pd.DataFrame([booking_data])],
-            ignore_index=True
+        cls._write_excel(
+            df,
+            cls.EVENTS_FILE
         )
 
-        df.to_excel(cls.BOOKINGS_FILE, index=False)
+    @classmethod
+    def update_event_status(
+        cls,
+        event_id,
+        status
+    ):
 
-    ## PAYMENTS
+        df = cls.load_events()
+
+        df.loc[
+            df["Event ID"] == event_id,
+            "Status"
+        ] = status
+
+        cls._write_excel(
+            df,
+            cls.EVENTS_FILE
+        )
+
+    # ==========================================================
+    # BOOKINGS
+    # ==========================================================
+
+    @classmethod
+    def load_bookings(cls):
+        return cls._read_excel(cls.BOOKINGS_FILE)
+
+    @classmethod
+    def booking_exists(
+        cls,
+        event_id,
+        flat_no
+    ):
+
+        df = cls.load_bookings()
+
+        return not df[
+            (df["Event ID"] == event_id)
+            &
+            (df["Flat No"] == flat_no)
+        ].empty
+
+    @classmethod
+    def save_booking(
+        cls,
+        booking
+    ):
+
+        df = cls.load_bookings()
+
+        df = cls._append_row(
+            df,
+            booking
+        )
+
+        cls._write_excel(
+            df,
+            cls.BOOKINGS_FILE
+        )
+
+    @classmethod
+    def update_payment_status(
+        cls,
+        booking_id,
+        status
+    ):
+
+        df = cls.load_bookings()
+
+        df.loc[
+            df["Booking ID"] == booking_id,
+            "Payment Status"
+        ] = status
+
+        cls._write_excel(
+            df,
+            cls.BOOKINGS_FILE
+        )
+
+    @classmethod
+    def update_booking_status(
+        cls,
+        booking_id,
+        status
+    ):
+
+        df = cls.load_bookings()
+
+        df.loc[
+            df["Booking ID"] == booking_id,
+            "Booking Status"
+        ] = status
+
+        cls._write_excel(
+            df,
+            cls.BOOKINGS_FILE
+        )
+
+    # ==========================================================
+    # PAYMENTS
+    # ==========================================================
 
     @classmethod
     def load_payments(cls):
-        return pd.read_excel(cls.PAYMENTS_FILE)
-
-    @classmethod
-    def save_payment(cls, payment_data):
-        df = cls.load_payments()
-
-        df = pd.concat(
-            [df, pd.DataFrame([payment_data])],
-            ignore_index=True
+        return cls._read_excel(
+            cls.PAYMENTS_FILE
         )
 
-        df.to_excel(cls.PAYMENTS_FILE, index=False)
+    @classmethod
+    def save_payment(
+        cls,
+        payment
+    ):
 
-    ## DASHBOARD
+        df = cls.load_payments()
+
+        df = cls._append_row(
+            df,
+            payment
+        )
+
+        cls._write_excel(
+            df,
+            cls.PAYMENTS_FILE
+        )
+
+    # ==========================================================
+    # DASHBOARD
+    # ==========================================================
 
     @classmethod
     def total_members(cls):
-        return len(cls.load_members())
+        return len(
+            cls.load_members()
+        )
 
     @classmethod
     def total_flats(cls):
-        df = cls.load_members()
+        return cls.load_members()[
+            "Flat No"
+        ].nunique()
 
-        return df["Flat No"].nunique()
+    @classmethod
+    def total_events(cls):
+        return len(
+            cls.load_events()
+        )
 
     @classmethod
     def total_bookings(cls):
-        return len(cls.load_bookings())
+        return len(
+            cls.load_bookings()
+        )
 
     @classmethod
     def total_revenue(cls):
+
         df = cls.load_bookings()
 
         if df.empty:
             return 0
 
-        return df["Total Amount"].sum()                     
-
-
+        return df["Total Amount"].sum()
